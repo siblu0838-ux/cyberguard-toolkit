@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>Password Strength Checker</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#121a2d; --muted:#9aa8c2; --text:#eef3ff; --line:#26334d; --accent:#8b9cff; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:28px 16px; background:radial-gradient(ellipse at 50% 0%,#1b2850 0,transparent 55%),var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    main { width:min(100%,560px); }
+    .eyebrow { color:#aab8ff; font-size:.78rem; font-weight:700; letter-spacing:.16em; text-transform:uppercase; text-align:center; }
+    h1 { margin:8px 0 8px; text-align:center; font-size:clamp(2rem,6vw,2.8rem); letter-spacing:-.04em; }
+    .intro { margin:0 auto 26px; max-width:440px; color:var(--muted); text-align:center; }
+    .card { padding:clamp(20px,5vw,32px); border:1px solid var(--line); border-radius:22px; background:linear-gradient(160deg,rgba(25,36,62,.97),rgba(15,22,39,.98)); box-shadow:0 24px 70px #0006; }
+    label { display:block; margin-bottom:9px; font-weight:650; }
+    .input-wrap { display:flex; gap:8px; }
+    input { min-width:0; flex:1; padding:14px 15px; border:1px solid #354462; border-radius:12px; outline:none; background:#0b1222; color:var(--text); font:inherit; }
+    input:focus { border-color:var(--accent); box-shadow:0 0 0 3px #8b9cff25; }
+    button { border:1px solid #354462; border-radius:12px; padding:0 15px; background:#202d49; color:var(--text); font:600 .9rem system-ui; cursor:pointer; }
+    button:hover { background:#2b3b60; }
+    .hint { margin:9px 0 22px; color:var(--muted); font-size:.82rem; }
+    .result { padding:17px; border:1px solid var(--line); border-radius:15px; background:#0d1526; }
+    .result-top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .strength { font-size:1.1rem; font-weight:750; }
+    .score { color:var(--muted); font-size:.85rem; }
+    .track { height:9px; margin:13px 0 8px; overflow:hidden; border-radius:99px; background:#27334b; }
+    .fill { width:0%; height:100%; border-radius:inherit; background:#ef6262; transition:width .2s ease,background .2s ease; }
+    .checks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:20px 0; }
+    .check { display:flex; align-items:center; gap:9px; color:var(--muted); font-size:.88rem; }
+    .dot { width:9px; height:9px; flex:none; border-radius:50%; background:#53617a; }
+    .check.pass { color:#d9e4ff; }
+    .check.pass .dot { background:#48d6a0; box-shadow:0 0 10px #48d6a055; }
+    .feedback { min-height:24px; margin:0; color:#c3cde0; font-size:.9rem; }
+    .privacy { margin:20px 2px 0; color:var(--muted); font-size:.8rem; text-align:center; }
+    .privacy strong { color:#dce6ff; }
+    @media (max-width:420px) { .checks { grid-template-columns:1fr; } .input-wrap { flex-wrap:wrap; } .input-wrap input { flex-basis:100%; } button { min-height:42px; flex:1; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Personal security tool</div>
+    <h1>Password Strength Checker</h1>
+    <p class="intro">Check how resistant a password may be to common guessing techniques. Your password stays in this browser.</p>
+    <section class="card" aria-label="Password strength checker">
+      <label for="password">Enter a password to check</label>
+      <div class="input-wrap">
+        <input id="password" type="password" autocomplete="off" spellcheck="false" placeholder="Type a password…" aria-describedby="hint">
+        <button id="toggle" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+        <button id="clear" type="button">Clear</button>
+      </div>
+      <p class="hint" id="hint">Do not enter a password you currently use for an important account. Try a sample instead.</p>
+      <div class="result" aria-live="polite">
+        <div class="result-top"><span class="strength" id="strength">Waiting for password</span><span class="score" id="score">0 / 100</span></div>
+        <div class="track" role="progressbar" aria-label="Password strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress"><div class="fill" id="fill"></div></div>
+        <p class="feedback" id="feedback">Start typing to see your results.</p>
+      </div>
+      <div class="checks" aria-label="Password checks">
+        <div class="check" id="length"><span class="dot"></span>At least 12 characters</div>
+        <div class="check" id="upper"><span class="dot"></span>Uppercase letter (A–Z)</div>
+        <div class="check" id="lower"><span class="dot"></span>Lowercase letter (a–z)</div>
+        <div class="check" id="number"><span class="dot"></span>Number (0–9)</div>
+        <div class="check" id="symbol"><span class="dot"></span>Symbol (e.g. !, #, %)</div>
+        <div class="check" id="unique"><span class="dot"></span>Good character variety</div>
+      </div>
+    </section>
+    <p class="privacy"><strong>Privacy:</strong> all checks run locally. Nothing is sent to a server or saved.</p>
+  </main>
+  <script>
+    const input = document.getElementById('password');
+    const fill = document.getElementById('fill');
+    const scoreEl = document.getElementById('score');
+    const strengthEl = document.getElementById('strength');
+    const feedbackEl = document.getElementById('feedback');
+    const progress = document.getElementById('progress');
+    const toggle = document.getElementById('toggle');
+    const common = new Set(['password','password1','123456','123456789','qwerty','letmein','welcome','admin','iloveyou','abc123','monkey','dragon','sunshine','football','master']);
+
+    function evaluate(password) {
+      if (!password) return { score:0, label:'Waiting for password', feedback:'Start typing to see your results.', checks:{} };
+      const checks = {
+        length: password.length >= 12,
+        upper: /[A-Z]/.test(password),
+        lower: /[a-z]/.test(password),
+        number: /[0-9]/.test(password),
+        symbol: /[^A-Za-z0-9]/.test(password),
+        unique: new Set(password).size >= Math.min(8, Math.ceil(password.length * .6))
+      };
+      let score = 0;
+      score += Math.min(password.length, 20) * 3;
+      score += [checks.upper, checks.lower, checks.number, checks.symbol].filter(Boolean).length * 7;
+      score += Math.min(new Set(password).size, 12) * 1.5;
+      if (password.length < 8) score -= 20;
+      if (/(.)\1{2,}/.test(password)) score -= 15;
+      if (/^(?:123|abc|qwe|asd|zxc)/i.test(password) || /(?:1234|abcd|qwerty)/i.test(password)) score -= 15;
+      if (common.has(password.toLowerCase())) score = 3;
+      if (/^[a-z]+$/i.test(password) || /^\d+$/.test(password)) score -= 10;
+      score = Math.max(0, Math.min(100, Math.round(score)));
+      let label = 'Very weak', feedback = 'Use a longer, less predictable password.';
+      if (score >= 80) { label = 'Strong'; feedback = 'Good work. A longer unique passphrase is even better.'; }
+      else if (score >= 60) { label = 'Good'; feedback = 'A decent start. Increase length and avoid predictable patterns.'; }
+      else if (score >= 35) { label = 'Fair'; feedback = 'Add length and more variety; avoid common words or sequences.'; }
+      if (common.has(password.toLowerCase())) feedback = 'This is a commonly used password. Choose something completely different.';
+      else if (/(.)\1{2,}/.test(password)) feedback = 'Repeated characters make passwords easier to guess.';
+      return { score, label, feedback, checks };
+    }
+
+    function update() {
+      const result = evaluate(input.value);
+      strengthEl.textContent = result.label;
+      scoreEl.textContent = result.score + ' / 100';
+      fill.style.width = result.score + '%';
+      const color = result.score >= 80 ? '#48d6a0' : result.score >= 60 ? '#9bd66d' : result.score >= 35 ? '#f2bd58' : '#ef6262';
+      fill.style.background = color;
+      progress.setAttribute('aria-valuenow', String(result.score));
+      feedbackEl.textContent = result.feedback;
+      Object.entries(result.checks).forEach(([key, pass]) => {
+        document.getElementById(key).classList.toggle('pass', pass);
+      });
+      if (!input.value) {
+        Object.keys(result.checks).forEach(key => document.getElementById(key).classList.remove('pass'));
+      }
+    }
+
+    input.addEventListener('input', update);
+    toggle.addEventListener('click', () => {
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      toggle.textContent = show ? 'Hide' : 'Show';
+      toggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      toggle.setAttribute('aria-pressed', String(show));
+      input.focus();
+    });
+    document.getElementById('clear').addEventListener('click', () => {
+      input.value = '';
+      input.type = 'password';
+      toggle.textContent = 'Show';
+      toggle.setAttribute('aria-label', 'Show password');
+      toggle.setAttribute('aria-pressed', 'false');
+      update();
+      input.focus();
+    });
+  </script>
+</body>
+</html>
